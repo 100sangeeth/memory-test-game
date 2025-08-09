@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Memory Game</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .score-board {
+      color: #fff;
+      font-size: 24px;
+      margin: 20px;
+      font-weight: bold;
+    }
+
+    .game-board {
+      position: relative;
+      width: 1000px;
+      height: 800px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .card {
+      width: 110px;
+      height: 110px;
+      background: transparent;
+      perspective: 1000px;
+      position: absolute;
+      cursor: pointer;
+    }
+
+    .card .front,
+    .card .back {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+      font-size: 48px;
+      transition: transform 0.6s ease;
+    }
+
+    .card .front {
+      background: linear-gradient(135deg, #7f7fd5, #86a8e7, #91eae4);
+      color: #fff;
+    }
+
+    .card .back {
+      background: #fff;
+      color: #333;
+      transform: rotateY(180deg);
+    }
+
+    .card.flip .front {
+      transform: rotateY(180deg);
+    }
+
+    .card.flip .back {
+      transform: rotateY(0deg);
+    }
+    .card-img{
+        width: 100px;
+        height: 100px;
+    }
+
+    .card.matched {
+      transform: scale(1.5);
+      z-index: 10;
+      box-shadow: 0 0 25px #fff;
+    }
+    @keyframes pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+.star {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: yellow;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%,
+                     79% 91%, 50% 70%, 21% 91%, 32% 57%,
+                     2% 35%, 39% 35%);
+  animation: twinkle 1.5s infinite ease-in-out;
+  opacity: 0.8;
+}
+
+@keyframes twinkle {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+
+
+.score-board.pop {
+  animation: pop 0.4s ease;
+}
+#level-complete {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: bold;
+  color: #00ffea;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+#level-complete.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.2);
+}
+#level-complete {
+  position: fixed;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: bold;
+  color: #00ffea;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+#level-complete.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+.hidden {
+  display: none;
+}
+
+.star-container {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+}
+
+.card.jiggle {
+  animation: jiggle 0.4s ease-in-out;
+}
+/* Shake animation */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+  100% { transform: translateX(0); }
+}
+
+.shake {
+  animation: shake 0.3s ease;
+}
+.card.correct {
+    border: 3px solid #00ff00; /* bright green */
+}
+
+.card.incorrect {
+    border: 3px solid #ff0000; /* bright red */
+}
+
+
+  </style>
+</head>
+<body>
+  <div class="score-board">Score: <span id="score">0</span></div>
+  <div class="game-board" id="board"></div>
+
+  <script>
+
+    const emojis = [
+    '../photos/1.png','../photos/2.png','../photos/3.png','../photos/4.png'
+    ,'../photos/8.png','../photos/7.png'
+    ];
+    const cardValues = [...emojis.slice(0, 12), ...emojis.slice(0, 12)];
+    cardValues.sort(() => Math.random() - 0.5);
+
+    const board = document.getElementById('board');
+    const scoreDisplay = document.getElementById('score');
+    let flippedCards = [];
+    let lockBoard = false;
+    let score = 0;
+
+    const cardWidth = 110;
+    const cardHeight = 110;
+
+    const placedCards = [];
+
+    function isOverlapping(x, y) {
+      return placedCards.some(pos => {
+        const dx = pos.x - x;
+        const dy = pos.y - y;
+        return Math.abs(dx) < cardWidth + 10 && Math.abs(dy) < cardHeight + 10;
+      });
+    }
+
+    function getNonOverlappingPosition() {
+      const rectWidth = 800;
+      const rectHeight = 600;
+      let x, y, tries = 0;
+      do {
+        x = Math.random() * (rectWidth - cardWidth);
+        y = Math.random() * (rectHeight - cardHeight);
+        tries++;
+      } while (isOverlapping(x, y) && tries < 100);
+      placedCards.push({ x, y });
+      return { x, y };
+    }
+
+    cardValues.forEach((emoji) => {
+      const card = document.createElement('div');
+      card.classList.add('card');
+      card.dataset.emoji = emoji;
+      card.innerHTML = `
+        <div class="front">❓</div>
+        <div class="back"><img class="card-img" src=${emoji} /></div>
+      `;
+
+      const { x, y } = getNonOverlappingPosition();
+      card.style.left = `${x}px`;
+      card.style.top = `${y}px`;
+
+      card.addEventListener('click', () => {
+        if (lockBoard || card.classList.contains('flip') || card.classList.contains('matched')) return;
+
+        card.classList.add('flip');
+        flippedCards.push(card);
+
+        if (flippedCards.length === 2) {
+          lockBoard = true;
+          const [card1, card2] = flippedCards;
+
+          if (card1.dataset.emoji === card2.dataset.emoji) {
+            card1.classList.add('correct');
+            card2.classList.add('correct');
+
+            score++;
+            scoreDisplay.textContent = score;
+            scoreDisplay.parentElement.classList.add('pop');
+
+setTimeout(() => {
+  
+  card1.style.display = 'none';
+  card2.style.display = 'none';
+  flippedCards = [];
+  lockBoard = false;
+
+  const allMatched = document.querySelectorAll('.card:not(.matched)').length === 0;
+if (allMatched) {
+    const message = document.getElementById('level-complete');
+    message.classList.remove('hidden');
+    message.classList.add('show');
+
+    // Show memory level graph
+    showMemoryGraph(score, 0); // Replace 0 with mistakes if you track them
+
+    setTimeout(() => {
+      message.classList.remove('show');
+    }, 3000);
+}
+
+}, 800);
+
+
+
+            setTimeout(() => {
+              card1.classList.add('matched');
+              card2.classList.add('matched');
+
+              const centerX = (board.clientWidth / 2) - (cardWidth / 2);
+              const centerY = (board.clientHeight / 2) - (cardHeight / 2);
+
+              card1.style.transition = 'transform 0.6s ease, left 0.6s ease, top 0.6s ease';
+              card2.style.transition = 'transform 0.6s ease, left 0.6s ease, top 0.6s ease';
+
+              card1.style.left = `${centerX}px`;
+              card1.style.top = `${centerY}px`;
+              card2.style.left = `${centerX}px`;
+              card2.style.top = `${centerY}px`;
+
+              setTimeout(() => {
+                card1.style.display = 'none';
+                card2.style.display = 'none';
+                flippedCards = [];
+                lockBoard = false;
+              }, 800);
+            }, 600);
+          } else {
+    // Add shake animation
+    card1.classList.add('shake');
+    card2.classList.add('shake');
+
+    // Remove shake after animation
+    setTimeout(() => {
+        card1.classList.remove('shake');
+        card2.classList.remove('shake');
+        card1.classList.remove('flip');
+        card2.classList.remove('flip');
+        flippedCards = [];
+        lockBoard = false;
+    }, 1000); // 1 second delay so animation finishes before flipping back
+}
+
+
+        }
+      });
+      board.appendChild(card);
+    });
+    
+</script>
+
+    
+    
+  </script>
+  <div id="level-complete" class="hidden">
+  <div class="star-container">
+    <div class="star" style="animation-delay: 0s;"></div>
+    <div class="star" style="animation-delay: 0.3s;"></div>
+    <div class="star" style="animation-delay: 0.6s;"></div>
+
+  </div>
+  LEVEL COMPLETED!
+</div>
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+        
+  
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</body>
+</html>
